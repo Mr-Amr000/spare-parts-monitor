@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>Edita — Spare Parts Stock Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #1C2321; --panel: #212826; --panel2: #252C2A; --border: #3A4340;
+    --text: #F5F1E8; --text-dim: #C7CBC6; --text-faint: #9AA09B; --muted: #7A8B8C;
+    --orange: #E8542E; --amber: #D9A63C; --green: #4A7A5C;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); }
+  body { font-family: 'Inter', -apple-system, sans-serif; color: var(--text); padding-bottom: 110px; -webkit-tap-highlight-color: transparent; }
+  input:focus { outline: 2px solid var(--amber); outline-offset: 1px; }
+  button:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+  button { font-family: inherit; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  #loading { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--amber); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loading span { margin-top: 16px; letter-spacing: 1px; }
+
+  header { display: flex; justify-content: space-between; align-items: flex-end; padding: 20px 20px 16px; border-bottom: 2px solid var(--border); flex-wrap: wrap; gap: 12px; }
+  .plant-label { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 2px; color: var(--muted); margin-bottom: 4px; font-weight: 600; }
+  .title { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 26px; letter-spacing: 1px; line-height: 1; }
+  .header-counts { display: flex; gap: 18px; }
+  .count-chip { text-align: center; min-width: 52px; }
+  .count-chip .val { font-family: 'JetBrains Mono', monospace; font-size: 24px; font-weight: 700; line-height: 1; }
+  .count-chip .lbl { font-size: 9px; letter-spacing: 1.2px; color: var(--muted); margin-top: 4px; font-weight: 600; }
+
+  .tab-bar { display: flex; gap: 2px; padding: 12px 20px 0; flex-wrap: wrap; }
+  .tab-btn { display: flex; align-items: center; gap: 6px; padding: 9px 14px; background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--text); font-size: 12.5px; font-weight: 500; cursor: pointer; border-radius: 6px 6px 0 0; white-space: nowrap; }
+  .tab-btn.active { background: var(--amber); color: var(--bg); border-color: var(--amber); }
+  .tab-btn svg { width: 15px; height: 15px; vertical-align: middle; }
+
+  .body-pad { padding: 16px 20px 0; }
+
+  .filter-bar { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+  .search-wrap { display: flex; align-items: center; gap: 8px; background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; }
+  .search-wrap input { flex: 1; background: transparent; border: none; color: var(--text); font-size: 14px; }
+  .search-wrap svg { flex-shrink: 0; }
+  .filter-group { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pill { padding: 5px 12px; border-radius: 20px; border: 1px solid rgba(245,241,232,0.18); font-size: 12px; font-weight: 500; cursor: pointer; background: transparent; color: #B8BCB9; }
+
+  .caption { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); margin-bottom: 10px; letter-spacing: 0.5px; }
+  .section-title { font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 700; letter-spacing: 0.5px; }
+
+  .row-list { display: flex; flex-direction: column; gap: 8px; }
+  .row { display: flex; border-radius: 6px; overflow: hidden; border: 1px solid rgba(245,241,232,0.08); }
+  .row-spine { width: 5px; flex-shrink: 0; }
+  .row-content { flex: 1; padding: 10px 14px; min-width: 0; }
+  .row-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; gap: 8px; }
+  .row-material { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; font-weight: 600; word-break: break-all; }
+  .row-priority-tag { font-size: 10px; font-weight: 700; border: 1px solid; border-radius: 3px; padding: 1px 6px; font-family: 'JetBrains Mono', monospace; flex-shrink: 0; }
+  .row-desc { font-size: 13px; color: var(--text-dim); margin-bottom: 8px; line-height: 1.3; }
+  .row-bottom { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .row-stat { display: flex; flex-direction: column; gap: 1px; }
+  .row-stat .lbl { font-size: 9px; letter-spacing: 1px; color: var(--muted); font-weight: 600; }
+  .row-stat .val { font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 600; }
+  .row-stat .unit { font-size: 10px; color: var(--muted); }
+  .editable-val { font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 600; cursor: pointer; border-bottom: 1px dashed var(--muted); padding: 0 2px; }
+  .mini-input { width: 52px; background: var(--bg); border: 1px solid var(--amber); border-radius: 4px; color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 14px; padding: 2px 6px; }
+  .status-badge { margin-left: auto; display: flex; align-items: center; gap: 5px; border: 1px solid; border-radius: 4px; padding: 4px 8px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.5px; }
+  .status-badge svg { width: 13px; height: 13px; }
+  .empty-state { color: var(--muted); font-size: 13px; padding: 30px 0; text-align: center; }
+  .empty-good { color: var(--text-dim); font-size: 13px; padding: 40px 0; text-align: center; display: flex; flex-direction: column; align-items: center; }
+
+  .reorder-header-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; gap: 10px; flex-wrap: wrap; }
+  .reorder-stats-line { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--text-dim); }
+  .suggested-order { color: var(--amber); font-weight: 600; }
+  .btn-secondary-sm { display: flex; align-items: center; gap: 6px; background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: var(--text); font-size: 12.5px; cursor: pointer; }
+  .btn-secondary-sm svg { width: 14px; height: 14px; }
+
+  .usage-row { border: 1px solid rgba(245,241,232,0.08); border-radius: 6px; padding: 10px 14px; background: var(--panel); }
+  .usage-top { display: flex; justify-content: space-between; align-items: center; }
+  .usage-rate { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--amber); font-weight: 600; }
+  .usage-bar-track { height: 5px; background: #2A322F; border-radius: 3px; margin-top: 8px; overflow: hidden; }
+  .usage-bar-fill { height: 100%; border-radius: 3px; }
+
+  .log-header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .log-entry { display: flex; border-radius: 6px; overflow: hidden; border: 1px solid rgba(245,241,232,0.08); background: var(--panel); }
+  .log-entry.latest { border: 1px solid rgba(217,166,60,0.4); }
+  .log-spine { width: 4px; flex-shrink: 0; }
+  .log-main { flex: 1; padding: 10px 14px; }
+  .log-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .log-material { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; font-weight: 600; word-break: break-all; }
+  .log-qty { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700; color: var(--orange); flex-shrink: 0; }
+  .log-desc { font-size: 12.5px; color: var(--text-dim); margin: 3px 0; }
+  .log-meta { font-size: 11px; color: var(--muted); }
+
+  .fab-wrap { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; z-index: 55; }
+  .fab-menu { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
+  .fab-menu-item { display: flex; align-items: center; gap: 8px; background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 16px; color: var(--text); font-size: 13px; font-weight: 500; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); white-space: nowrap; }
+  .fab-menu-item svg { width: 16px; height: 16px; vertical-align: middle; }
+  .fab { width: 56px; height: 56px; border-radius: 50%; background: var(--amber); border: none; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(0,0,0,0.4); cursor: pointer; }
+
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none; align-items: flex-end; justify-content: center; z-index: 60; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--bg); width: 100%; max-width: 480px; border-radius: 16px 16px 0 0; border: 1px solid var(--border); border-bottom: none; max-height: 88vh; overflow-y: auto; }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 18px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg); }
+  .modal-title { font-family: 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 700; letter-spacing: 1px; }
+  .modal-close { background: transparent; border: none; cursor: pointer; padding: 4px; }
+  .form { padding: 16px 18px 24px; display: flex; flex-direction: column; }
+  .form-row { display: flex; gap: 10px; }
+  .form-row > div { flex: 1; min-width: 0; }
+  label.field-label { font-size: 11px; letter-spacing: 0.8px; color: var(--muted); font-weight: 600; margin-top: 14px; margin-bottom: 6px; display: block; }
+  .form input[type="text"], .form input[type="number"] { background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; padding: 11px 12px; color: var(--text); font-size: 14px; width: 100%; font-family: inherit; }
+  .suggest-list { margin-top: 6px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; max-height: 220px; overflow-y: auto; }
+  .suggest-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; cursor: pointer; border-bottom: 1px solid #2A322F; }
+  .suggest-item:last-child { border-bottom: none; }
+  .suggest-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .suggest-id { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; }
+  .suggest-desc { font-size: 11.5px; color: var(--text-faint); margin-top: 1px; }
+  .priority-toggle { display: flex; gap: 6px; }
+  .priority-toggle button { flex: 1; padding: 10px 0; border-radius: 8px; border: 1px solid; font-weight: 700; cursor: pointer; font-family: 'JetBrains Mono', monospace; background: transparent; }
+  .form-error { color: var(--orange); font-size: 12.5px; margin-top: 10px; }
+  .btn-submit { margin-top: 22px; background: var(--amber); border: none; border-radius: 8px; padding: 13px; color: var(--bg); font-size: 14px; font-weight: 700; cursor: pointer; flex: 1; }
+  .btn-back { margin-top: 22px; background: transparent; border: 1px solid var(--border); border-radius: 8px; padding: 13px; color: var(--text); font-size: 14px; font-weight: 600; cursor: pointer; flex: 1; }
+  .import-hint { font-size: 12.5px; color: var(--text-faint); line-height: 1.5; margin-bottom: 12px; }
+  .template-btn { display: flex; align-items: center; gap: 6px; justify-content: center; background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; color: var(--amber); font-size: 12.5px; cursor: pointer; margin-bottom: 12px; width: 100%; }
+  .upload-zone { display: flex; flex-direction: column; align-items: center; gap: 8px; border: 1.5px dashed var(--border); border-radius: 10px; padding: 28px 16px; cursor: pointer; color: var(--text-faint); font-size: 12.5px; text-align: center; }
+
+  #toast { position: fixed; bottom: 96px; left: 50%; transform: translateX(-50%); background: var(--panel2); border: 1px solid; border-radius: 8px; padding: 11px 16px; font-size: 13px; max-width: 90%; text-align: center; z-index: 70; box-shadow: 0 4px 14px rgba(0,0,0,0.4); display: none; }
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <span>LOADING STOCK PANEL…</span>
+</div>
+
+<div id="app" style="display:none;">
+  <header>
+    <div>
+      <div class="plant-label">EDITA · ELECTRICAL MAINTENANCE</div>
+      <div class="title">SPARE PARTS STOCK MONITOR</div>
+    </div>
+    <div class="header-counts">
+      <div class="count-chip"><div class="val" id="cnt-reorder" style="color:#E8542E">0</div><div class="lbl">REORDER</div></div>
+      <div class="count-chip"><div class="val" id="cnt-low" style="color:#D9A63C">0</div><div class="lbl">LOW</div></div>
+      <div class="count-chip"><div class="val" id="cnt-ok" style="color:#4A7A5C">0</div><div class="lbl">OK</div></div>
+    </div>
+  </header>
+
+  <div class="tab-bar" id="tab-bar"></div>
+
+  <div class="body-pad tab-panel" id="panel-dashboard">
+    <div class="filter-bar">
+      <div class="search-wrap" id="search-wrap">
+        <input type="text" id="search-input" placeholder="Search material code or description…" oninput="onSearch(this.value)">
+      </div>
+      <div class="filter-group" id="priority-filters"></div>
+      <div class="filter-group" id="status-filters"></div>
+    </div>
+    <div class="caption" id="dash-caption"></div>
+    <div class="row-list" id="dash-rows"></div>
+  </div>
+
+  <div class="body-pad tab-panel" id="panel-reorder" style="display:none;">
+    <div class="reorder-header-row">
+      <div>
+        <div class="section-title">REORDER NOW</div>
+        <div class="caption">Current Qty ≤ Min · sorted by priority</div>
+      </div>
+      <button class="btn-secondary-sm" id="export-btn" onclick="downloadReorderCSV()" style="display:none;">Export CSV</button>
+    </div>
+    <div id="reorder-content"></div>
+  </div>
+
+  <div class="body-pad tab-panel" id="panel-usage" style="display:none;">
+    <div class="section-title">FASTEST-MOVING ITEMS</div>
+    <div class="caption">Average units consumed per day since first logged</div>
+    <div id="usage-content"></div>
+  </div>
+
+  <div class="body-pad tab-panel" id="panel-log" style="display:none;">
+    <div class="log-header-row">
+      <div class="caption" id="log-caption"></div>
+      <button class="btn-secondary-sm" id="undo-btn" onclick="undoLastLog()" style="display:none; color:#D9A63C;">Undo last</button>
+    </div>
+    <div class="row-list" id="log-content"></div>
+  </div>
+
+  <div class="fab-wrap">
+    <div class="fab-menu" id="fab-menu" style="display:none;">
+      <button class="fab-menu-item" onclick="closeMenu(); openModal('log-modal')">Log consumption</button>
+      <button class="fab-menu-item" onclick="closeMenu(); openModal('add-modal')">Add new material</button>
+      <button class="fab-menu-item" onclick="closeMenu(); openModal('import-modal')">Import from Excel</button>
+    </div>
+    <button class="fab" id="fab-btn" onclick="toggleMenu()"></button>
+  </div>
+
+  <div class="modal-overlay" id="log-modal" onclick="if(event.target===this) closeModal('log-modal')">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <span class="modal-title">LOG CONSUMPTION</span>
+        <button class="modal-close" onclick="closeModal('log-modal')" id="log-close-btn"></button>
+      </div>
+      <div class="form">
+        <label class="field-label">Material</label>
+        <input type="text" id="log-material-input" placeholder="Search by code or description…" oninput="onMaterialQuery(this.value)">
+        <div class="suggest-list" id="log-suggest-list"></div>
+        <label class="field-label">Quantity taken</label>
+        <input type="number" id="log-qty-input" min="1" placeholder="e.g. 2">
+        <label class="field-label">Taken by</label>
+        <input type="text" id="log-by-input" placeholder="Technician name">
+        <label class="field-label">Machine / reason (optional)</label>
+        <input type="text" id="log-reason-input" placeholder="e.g. Line 3 filler">
+        <div class="form-error" id="log-form-error"></div>
+        <button class="btn-submit" onclick="submitLog()">Log withdrawal</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="add-modal" onclick="if(event.target===this) closeModal('add-modal')">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <span class="modal-title">ADD NEW MATERIAL</span>
+        <button class="modal-close" onclick="closeModal('add-modal')" id="add-close-btn"></button>
+      </div>
+      <div class="form">
+        <label class="field-label">Material code</label>
+        <input type="text" id="new-id-input" placeholder="e.g. SPM-000000999">
+        <label class="field-label">Description</label>
+        <input type="text" id="new-desc-input" placeholder="e.g. Contactor 3-phase 40A">
+        <div class="form-row">
+          <div>
+            <label class="field-label">Unit</label>
+            <input type="text" id="new-unit-input" placeholder="EA" value="EA">
+          </div>
+          <div>
+            <label class="field-label">Priority</label>
+            <div class="priority-toggle" id="new-priority-toggle"></div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div><label class="field-label">Starting qty</label><input type="number" id="new-qty-input" min="0"></div>
+          <div><label class="field-label">Min</label><input type="number" id="new-min-input" min="0"></div>
+        </div>
+        <div class="form-row">
+          <div><label class="field-label">Reorder point</label><input type="number" id="new-reorderpoint-input" min="0"></div>
+          <div><label class="field-label">Max</label><input type="number" id="new-max-input" min="0"></div>
+        </div>
+        <div class="form-error" id="add-form-error"></div>
+        <button class="btn-submit" onclick="submitAddItem()">Add material</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="import-modal" onclick="if(event.target===this) closeModal('import-modal')">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <span class="modal-title">IMPORT FROM EXCEL</span>
+        <button class="modal-close" onclick="closeModal('import-modal')" id="import-close-btn"></button>
+      </div>
+      <div class="form" id="import-form-content"></div>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+const SEED_ITEMS_JSON = [{"id":"SPM-000000261","desc":"ريلاي بالقاعدة 14 طرف 24","unit":"PC","priority":"A","qty":13},{"id":"SPM-COOLXXX000391","desc":"Temperature Controller (ICPlus 902)","unit":"EA","priority":"A","qty":3},{"id":"SPM-COOLXXX000451","desc":"Coil (Solenoid) 110V 50/60HZ 10W+Cable1M","unit":"EA","priority":"A","qty":1},{"id":"SPM-ELECTXX000523","desc":"Proximity Sensor Type:E2A-M18KS08-M1-B1","unit":"EA","priority":"A","qty":4},{"id":"SPM-ELECTXX001377","desc":"Safety InterlockSwitch with GuardLocking","unit":"EA","priority":"A","qty":4},{"id":"SPM-ELECTXX001410","desc":"Digital Potentiometer Type: EDP2041","unit":"EA","priority":"A","qty":1},{"id":"SPM-ELECTXX001678","desc":"Photo Electric SensorG18-3B2NC+Reflector","unit":"EA","priority":"A","qty":1},{"id":"SPM-ELECTXX001680","desc":"Photo Electric Switch Type: CDD-40P-L","unit":"EA","priority":"A","qty":1},{"id":"SPM-ELECTXX001681","desc":"Photoelectric Sensor type FT18-AP2","unit":"EA","priority":"A","qty":2},{"id":"SPM-ELECTXX001711","desc":"Safety relay PNOZ X3 Part No.774318","unit":"EA","priority":"A","qty":1},{"id":"SPM-ELECTXX001725","desc":"Coil (Solenoid) Type: EVI 5M/13","unit":"EA","priority":"A","qty":3},{"id":"SPM-ELECTXX001726","desc":"Photoelectric sensor Model: BGS-HL25TC2","unit":"EA","priority":"A","qty":2},{"id":"SPM-ELECTXX001738","desc":"Miniature Photoelectric sensorWL150-P420","unit":"EA","priority":"A","qty":7},{"id":"SPM-ELECTXX001741","desc":"Thermocouple PT100  (RTD) 6mm*60mm","unit":"EA","priority":"A","qty":3},{"id":"SPM-ELECTXX001742","desc":"Electro Valve Connector  MPM B-12","unit":"EA","priority":"A","qty":4},{"id":"SPM-ELECTXX001743","desc":"Double Heater D=10mm,L=3.8m ,220V,300W","unit":"EA","priority":"A","qty":2},{"id":"SPM-ELECTXX001751","desc":"Photoelectric sensor Model: BGS-DL10TCN","unit":"EA","priority":"A","qty":1},{"id":"SPM-ELECTXX001762","desc":"Level control  Mod.CL1001/U 110/220 Vac","unit":"EA","priority":"A","qty":2},{"id":"SPM-ELECTXX001794","desc":"Thermal Circuit Breaker 3RV2011-0KA10","unit":"EA","priority":"A","qty":1},{"id":"SPM-ELECTXX001795","desc":"Electric Overload Type: EOCRSE2-60NS","unit":"EA","priority":"A","qty":1},{"id":"SPM-ELECTXX001817","desc":"Safety Relay Type:CS AR-24V024","unit":"EA","priority":"A","qty":1},{"id":"SPM-ELECTXX001818","desc":"Proximity Sensor Reed SMC -D-B54","unit":"EA","priority":"A","qty":2},{"id":"SPM-ELECTXX001823","desc":"Emergency STOP relay NST-3.2 , 24V DC","unit":"EA","priority":"A","qty":2},{"id":"SPM-ELECTXX001828","desc":"Humidity sensor Model :FOX 1H","unit":"EA","priority":"A","qty":1},{"id":"SPM-ELECTXX001865","desc":"Double Heater D=10mm,L=4.4 M , 220V,300W","unit":"EA","priority":"A","qty":2},{"id":"SPM-ELECTXXX000062","desc":"Heater 3 kw flange 1.5\" 220V","unit":"EA","priority":"A","qty":3},{"id":"SPM-ELECTXXX000152","desc":"ThermoCouple, length 1 m","unit":"EA","priority":"A","qty":13},{"id":"SPM-ELECTXXX000458","desc":"THERMOHEATER D.3X25 PT100 OHM","unit":"EA","priority":"A","qty":3},{"id":"SPM-ELECTXXX000483","desc":"Overload Relay  Type: LRD21","unit":"EA","priority":"A","qty":1},{"id":"SPM-ELECTXXX000485","desc":"Overload Relay  Type: LRD32","unit":"EA","priority":"A","qty":2},{"id":"SPM-ELECTXXX000521","desc":"Magnetic Switch-Sensor Secure cable 10mt","unit":"EA","priority":"A","qty":2},{"id":"SPM-ELECTXXX000534","desc":"Miniature Circuit Breaker Type: IC60H","unit":"EA","priority":"A","qty":8},{"id":"SPM-ELECTXXX000551","desc":"Thermal Magnetic Circuit Breaker","unit":"EA","priority":"A","qty":2},{"id":"SPM-ELECTXXX000771","desc":"Relay with Base","unit":"EA","priority":"A","qty":9},{"id":"SPM-ELECTXXX001003","desc":"Potentiometer, 10 KΩ, 1.5W","unit":"EA","priority":"A","qty":10},{"id":"SPM-ELECTXXX001010","desc":"Round Stop Push Button","unit":"EA","priority":"A","qty":5},{"id":"SPM-ELECTXXX001088","desc":"Potentiometer, P/N.: 3590S-2-502L","unit":"EA","priority":"A","qty":1},{"id":"SPM-ELECTXXX001131","desc":"Contactor  Type: LC1D25M7","unit":"EA","priority":"A","qty":1},{"id":"SPM-000000123","desc":"سخان خاص بماكينة التعبئة PFM","unit":"PC","priority":"B","qty":8},{"id":"SPM-000000132","desc":"بروكستشى","unit":"PC","priority":"B","qty":1},{"id":"SPM-000000133","desc":"حساس رطوبه","unit":"PC","priority":"B","qty":2},{"id":"SPM-000000165","desc":"مقاومه 1ك كامله","unit":"PC","priority":"B","qty":2},{"id":"SPM-000000166","desc":"مقاومه 2ك كامله","unit":"PC","priority":"B","qty":5},{"id":"SPM-000000167","desc":"مقاومه 5 ك","unit":"PC","priority":"B","qty":2},{"id":"SPM-000000196","desc":"ريلاي بالقاعدة 11رجل 220فولت","unit":"PC","priority":"B","qty":1},{"id":"SPM-000000203","desc":"حساس بروكسمتى","unit":"PC","priority":"B","qty":1},{"id":"SPM-000000217","desc":"فيشة نتاية كاوتش","unit":"PC","priority":"B","qty":8},{"id":"SPM-000000259","desc":"بريزه خارج الحاط بالغطاء","unit":"PC","priority":"B","qty":5},{"id":"SPM-ELECTXX001354","desc":"Auxiliary Contact Block Type: GVAE11","unit":"EA","priority":"B","qty":1},{"id":"SPM-ELECTXX001418","desc":"Male connector (SICK) Type: STE-1204-G","unit":"EA","priority":"B","qty":2},{"id":"SPM-ELECTXX001677","desc":"Ceramic Fuse 10mm x 38mm","unit":"EA","priority":"B","qty":19},{"id":"SPM-ELECTXX001706","desc":"Cable Crimp terminal (Ring) T6-6","unit":"EA","priority":"B","qty":36},{"id":"SPM-ELECTXX001707","desc":"Connection Cable Type: M8-FS4-PVC-5M","unit":"EA","priority":"B","qty":2},{"id":"SPM-ELECTXX001716","desc":"Humidity/Temp.Transmitter Type:THD-WD2-C","unit":"EA","priority":"B","qty":1},{"id":"SPM-ELECTXX001719","desc":"Contactor Type: 3RT2036-1AL20","unit":"EA","priority":"B","qty":3},{"id":"SPM-ELECTXX001720","desc":"SIRIUS Overload relay P/N.: 3RB3036-1UB0","unit":"EA","priority":"B","qty":1},{"id":"SPM-ELECTXX001721","desc":"Mini Timer Type: MY-60S-4P- 24V DC","unit":"EA","priority":"B","qty":1},{"id":"SPM-ELECTXX001722","desc":"Ceramic Fuse 22*58 mm , 63A","unit":"EA","priority":"B","qty":3},{"id":"SPM-ELECTXX001749","desc":"Potentiometer Transmitter type DAT205-2W","unit":"EA","priority":"B","qty":2},{"id":"SPM-ELECTXX001753","desc":"Multi Function Timer Model: AT11DN","unit":"EA","priority":"B","qty":2},{"id":"SPM-ELECTXX001819","desc":"Communication Socket Male 9 Pin","unit":"EA","priority":"B","qty":1},{"id":"SPM-ELECTXX001820","desc":"Contactor Type :LC1D40AM7","unit":"EA","priority":"B","qty":2},{"id":"SPM-ELECTXX001825","desc":"Potentiometer Type: RV24YN20S ,20kΩ","unit":"EA","priority":"B","qty":2},{"id":"SPM-ELECTXX001884","desc":"Safety Limit Switch Type: D4N 1132","unit":"EA","priority":"B","qty":1},{"id":"SPM-ELECTXX001903","desc":"Safety Guard actuator AZ 15/16-B1","unit":"EA","priority":"B","qty":4},{"id":"SPM-ELECTXXX000039","desc":"Thermocouple Ø 4mm* 2cm.,type:J","unit":"EA","priority":"B","qty":3},{"id":"SPM-ELECTXXX000041","desc":"Silencer 1/8\"","unit":"EA","priority":"B","qty":23},{"id":"SPM-ELECTXXX000094","desc":"Ceramic Fuse (DF) Type: NH000 gG/gl","unit":"EA","priority":"B","qty":2},{"id":"SPM-ELECTXXX000209","desc":"Emergency Limit Switch, 1NO+1NC","unit":"EA","priority":"B","qty":1},{"id":"SPM-ELECTXXX000312","desc":"Ceramic Fuse 10mm x 38mm","unit":"EA","priority":"B","qty":10},{"id":"SPM-ELECTXXX000313","desc":"Ceramic Fuse 10mm x 38mm","unit":"EA","priority":"B","qty":2},{"id":"SPM-ELECTXXX000322","desc":"Auxiliary contact blocktype: LADN22","unit":"EA","priority":"B","qty":1},{"id":"SPM-ELECTXXX000323","desc":"Auxiliary contact blocktype: LAD8N11","unit":"EA","priority":"B","qty":5},{"id":"SPM-ELECTXXX000518","desc":"Safety LS PIZZATO FD515 B11FD1","unit":"EA","priority":"B","qty":1},{"id":"SPM-ELECTXXX000773","desc":"Cable Crimp terminal (Ring) T10-6","unit":"EA","priority":"B","qty":21},{"id":"SPM-ELECTXXX000784","desc":"Cable Crimp terminal (Ring) T10-8","unit":"EA","priority":"B","qty":31},{"id":"SPM-ELECTXXX000788","desc":"Cable Crimp terminal (Ring) T25-12","unit":"EA","priority":"B","qty":7},{"id":"SPM-ELECTXXX000791","desc":"Cable Crimp terminal (Ring) T50-10","unit":"EA","priority":"B","qty":50},{"id":"SPM-ELECTXXX001056","desc":"Relay Base Type: RXZE2S114M","unit":"EA","priority":"B","qty":5},{"id":"SPM-ELECTXXX001085","desc":"Circuit Breaker Type:DomA41","unit":"EA","priority":"B","qty":2},{"id":"SPM-ELECTXXX001111","desc":"Thermal Magnetic Circuit Breaker","unit":"EA","priority":"B","qty":1},{"id":"SPM-GEARBOX001012","desc":"Helical geared motor R47 DT80K4/BMG/TH","unit":"EA","priority":"B","qty":1},{"id":"SPM-PACKXXX001036","desc":"RESISTANCE D=6.5mm ,200W, 20V, L=350mm","unit":"EA","priority":"B","qty":2},{"id":"SPM-PACKXXX001061","desc":"PHOTO.DATASENSOR S3Z-PR-5-M01-PL","unit":"EA","priority":"B","qty":1},{"id":"SPM-PACKXXXX000333","desc":"Power Supply,Type:SITOP Modular,20 A,3p","unit":"EA","priority":"B","qty":1},{"id":"SPM-PNUMATC000650","desc":"Pressure switch controler PSNS-C110 1-10","unit":"EA","priority":"B","qty":1},{"id":"SPM-PNUMATC000695","desc":"Pressure Switch PT/12","unit":"EA","priority":"B","qty":1},{"id":"SPMELECTXXXX000107","desc":"Auxiliary contact 3RH1921-FA22","unit":"EA","priority":"B","qty":2},{"id":"SPM-000000124","desc":"سخان 6 ملى 220 فولت","unit":"PC","priority":"C","qty":4},{"id":"SPM-000000125","desc":"لمت سوتش GPT","unit":"PC","priority":"C","qty":2},{"id":"SPM-000000126","desc":"سلك حساس FS5","unit":"PC","priority":"C","qty":3},{"id":"SPM-000000131","desc":"عداد حراره اتوماتيك","unit":"PC","priority":"C","qty":1},{"id":"SPM-000000136","desc":"مروحتين تبريد 12سم ×15سم","unit":"PC","priority":"C","qty":2},{"id":"SPM-000000141","desc":"علبه فيوز زجاجى","unit":"PC","priority":"C","qty":100},{"id":"SPM-000000145","desc":"جلاند كابل PG42","unit":"PC","priority":"C","qty":10},{"id":"SPM-000000146","desc":"جلاند كابل PG48","unit":"PC","priority":"C","qty":10},{"id":"SPM-000000147","desc":"ريكم 6 ملم","unit":"M","priority":"C","qty":500},{"id":"SPM-000000148","desc":"ريكم 8 ملم","unit":"M","priority":"C","qty":500},{"id":"SPM-000000149","desc":"طقم اصلاح PLC","unit":"PC","priority":"C","qty":2},{"id":"SPM-000000150","desc":"شربون 6 ملم","unit":"PC","priority":"C","qty":4},{"id":"SPM-000000151","desc":"لمبة 2 بول","unit":"PC","priority":"C","qty":78},{"id":"SPM-000000152","desc":"حساس ماجيستيك 2 طرف","unit":"PC","priority":"C","qty":1},{"id":"SPM-000000153","desc":"كونتاكتور 110 فولت","unit":"PC","priority":"C","qty":5},{"id":"SPM-000000154","desc":"كشاف دائرى 30وات","unit":"PC","priority":"C","qty":1},{"id":"SPM-000000157","desc":"مفتاح باور بالسويتش 32","unit":"PC","priority":"C","qty":1},{"id":"SPM-000000159","desc":"لمبه اللون اشاره","unit":"PC","priority":"C","qty":9},{"id":"SPM-000000161","desc":"سخان صباع 110 فولت 6*5","unit":"PC","priority":"C","qty":2},{"id":"SPM-000000206","desc":"لمبة اشاره (بيان)","unit":"PC","priority":"C","qty":30},{"id":"SPM-000000211","desc":"مفتاح غساله 16 امبير","unit":"PC","priority":"C","qty":1},{"id":"SPM-000000216","desc":"جلاند كابل PG36","unit":"PC","priority":"C","qty":4},{"id":"SPM-000000224","desc":"coiL valve 220 v","unit":"PC","priority":"C","qty":1},{"id":"SPM-COOLXXX000452","desc":"Capacitor CBB65A-1 , 35+2.5µF ±5% SH","unit":"EA","priority":"C","qty":2},{"id":"SPM-COOLXXX000453","desc":"Motor Capacitor CBB60 , 6µF ±5% SH","unit":"EA","priority":"C","qty":4},{"id":"SPM-ELECTXX001273","desc":"Siren Alarm  (Sound & Rotary light)","unit":"EA","priority":"C","qty":2},{"id":"SPM-ELECTXX001527","desc":"Relay (Schneider)  Type: RSB2A080BD","unit":"EA","priority":"C","qty":1},{"id":"SPM-ELECTXX001610","desc":"Connection Cable Type:WKC4.4T-5/TEL","unit":"EA","priority":"C","qty":1},{"id":"SPM-ELECTXX001710","desc":"Motor Start Capacitor CD60","unit":"EA","priority":"C","qty":2},{"id":"SPM-ELECTXX001712","desc":"Heater D=12mmx L=60 CM,220V,650W","unit":"EA","priority":"C","qty":25},{"id":"SPM-ELECTXX001713","desc":"Heater D=10mmx L=30 CM, 110V, 350W","unit":"EA","priority":"C","qty":6},{"id":"SPM-ELECTXX001714","desc":"Heater D=10mmx L=25 CM, 110V, 250W","unit":"EA","priority":"C","qty":3},{"id":"SPM-ELECTXX001715","desc":"Heater D=6mmx L=35 CM, 115V, 400W","unit":"EA","priority":"C","qty":5},{"id":"SPM-ELECTXX001796","desc":"Timer (Autonics) LE8N–BN Series","unit":"EA","priority":"C","qty":2},{"id":"SPM-ELECTXXX000798","desc":"GLASS FUSE 2A  5mm x 20mm","unit":"EA","priority":"C","qty":89},{"id":"SPM-ELECTXXX000806","desc":"GLASS FUSE 10A  6mm x 30mm","unit":"EA","priority":"C","qty":90},{"id":"SPM-ELECTXXX000814","desc":"GLASS FUSE 5A  5mm x 20mm","unit":"EA","priority":"C","qty":65},{"id":"SPM-ELECTXXX001065","desc":"Circuit Breaker Type:C120N","unit":"EA","priority":"C","qty":1},{"id":"SPM-ELECTXXX001079","desc":"Ceramic Fuse 16A","unit":"EA","priority":"C","qty":20},{"id":"SPM-ELECTXXX001166","desc":"Glass Fuse 1 A, Dimensions: 6mmx30mm","unit":"EA","priority":"C","qty":95},{"id":"SPM-ELECTXXX001272","desc":"Heater with Brass Flange 1.5\"","unit":"EA","priority":"C","qty":3},{"id":"SPM-GEARBOXX000812","desc":"Aluminum fan for motor","unit":"EA","priority":"C","qty":2},{"id":"SPM-PACKXXX000639","desc":"FINSEAL WHEEL HEATER D=90 110V 450W 2 GI","unit":"EA","priority":"C","qty":5},{"id":"SPM-000000193","desc":"سخان ماكينة لحام الاكياس","unit":"PC","priority":"C","qty":1},{"id":"SPM-000000195","desc":"ريلية ماكينة لحام اكياس","unit":"PC","priority":"C","qty":1},{"id":"SPM-COMPXXX000055","desc":"Electric Drain  Part No.:8102025007","unit":"EA","priority":"C","qty":0},{"id":"SPM-COMPXXX000056","desc":"HMI Control Panel Part No.:1900520002","unit":"EA","priority":"C","qty":0},{"id":"SPM-COMPXXX000058","desc":"THERMOSTAT KIT40 DEGREE C P/N.2901161600","unit":"EA","priority":"C","qty":0},{"id":"SPM-COOLXXX000459","desc":"Pressure switch Model : LF5832HM","unit":"EA","priority":"C","qty":2},{"id":"SPM-ELECTXX001457","desc":"sloat Switch , Supply Voltage: 220V AC","unit":"EA","priority":"C","qty":2},{"id":"SPM-ELECTXX001586","desc":"Variable speed drive type: ATV12H075M2","unit":"EA","priority":"C","qty":0},{"id":"SPM-ELECTXX001590","desc":"Inverter (Altivar)  Type: ATV320U07N4B","unit":"EA","priority":"C","qty":0},{"id":"SPM-ELECTXX001591","desc":"Inverter (Altivar)  Type: ATV320U15N4B","unit":"EA","priority":"C","qty":0},{"id":"SPM-ELECTXX001718","desc":"Power Supply  Type: ABL2REM24020K","unit":"EA","priority":"C","qty":0},{"id":"SPM-ELECTXX001723","desc":"Proface Graphic Panel Model: GP477R-EG11","unit":"EA","priority":"C","qty":1},{"id":"SPM-ELECTXX001724","desc":"Proface Graphic Panel Model: GP410-EG11","unit":"EA","priority":"C","qty":1},{"id":"SPM-ELECTXX001752","desc":"Contactor (Schneider) Type: LC1DT40BD","unit":"EA","priority":"C","qty":1},{"id":"SPM-ELECTXX001755","desc":"Pressure Transmitter AKS33 P/N: 060G2110","unit":"EA","priority":"C","qty":0},{"id":"SPM-ELECTXX001768","desc":"Counter (Autonics) LA8N -BN series","unit":"EA","priority":"C","qty":0},{"id":"SPM-ELECTXX001821","desc":"Coil of Circuit Breaker Type3RV2902-1AP0","unit":"EA","priority":"C","qty":0},{"id":"SPM-ELECTXX001822","desc":"Safety sensor Type:BNS 333-01YD-M20","unit":"EA","priority":"C","qty":0},{"id":"SPM-ELECTXX001826","desc":"PLC Base Unit Type: FX3U-32MT/ESS","unit":"EA","priority":"C","qty":0},{"id":"SPM-ELECTXX001842","desc":"Compact smart relay Type: SR2A201FU","unit":"EA","priority":"C","qty":0},{"id":"SPM-ELECTXX001881","desc":"Photo Electric Sensor Type:E3Z-T61","unit":"EA","priority":"C","qty":0},{"id":"SPM-ELECTXXX000117","desc":"Proximity Type:FT 18-1 ID-PSL4","unit":"EA","priority":"C","qty":0},{"id":"SPM-ELECTXXX000124","desc":"Photoelectric sensorType : O1D100","unit":"EA","priority":"C","qty":0},{"id":"SPM-ELECTXXX000127","desc":"Inductive sensor (Turck)","unit":"EA","priority":"C","qty":0},{"id":"SPM-ELECTXXX000149","desc":"Multifunction timer(TELE) Type:E1ZMQ10","unit":"EA","priority":"C","qty":0},{"id":"SPM-ELECTXXX000321","desc":"Auxiliary contact blocktype: LADN11","unit":"EA","priority":"C","qty":0},{"id":"SPM-ELECTXXX000498","desc":"Plastic Reflector Type:95A151340","unit":"EA","priority":"C","qty":0},{"id":"SPM-ELECTXXX000562","desc":"Contactor  Type: LC1D32BD","unit":"EA","priority":"C","qty":0},{"id":"SPM-ELECTXXX001009","desc":"Round Start Push Button","unit":"EA","priority":"C","qty":0},{"id":"SPM-ELECTXXX001035","desc":"Phase Failure Device Type: MK-03","unit":"EA","priority":"C","qty":0},{"id":"SPM-ELECTXXX001104","desc":"Timer Type: AT8N","unit":"EA","priority":"C","qty":0},{"id":"SPM-ELECTXXX001154","desc":"Contactor  Type: LC1D150M7","unit":"EA","priority":"C","qty":0},{"id":"SPM-ELECTXXX001291","desc":"Cooling Fan for Panel","unit":"EA","priority":"C","qty":0},{"id":"SPM-GEARBOX000749","desc":"Motor  3 Phases  Type: 1LA7107-4AA10","unit":"EA","priority":"C","qty":0},{"id":"SPM-PACKXXX001058","desc":"Electrovalve  P/N.: ENM37928","unit":"EA","priority":"C","qty":1},{"id":"SPM-PACKXXX001059","desc":"Data Cable Smart Jet","unit":"EA","priority":"C","qty":0},{"id":"SPM-PACKXXXX000516","desc":"THERMOCOUPLE  Feeler  K IEC","unit":"EA","priority":"C","qty":2},{"id":"SPM-PNUMATC000670","desc":"Solenoid Valve Mod.:FW-02-3C2-D24-Z5L-50","unit":"EA","priority":"C","qty":2},{"id":"SPM-PNUMATC000693","desc":"Solenoid Type: VFS2100-5FZ-02","unit":"EA","priority":"C","qty":1},{"id":"SPM-PNUMATC000701","desc":"Solenoid Control Valve FW-03-3C2-A110-Z5","unit":"EA","priority":"C","qty":2},{"id":"SPM-PNUMATCX000029","desc":"Connector  Type: QS-B-8","unit":"EA","priority":"C","qty":19},{"id":"SPM-PNUMATCX000030","desc":"Connector  Type: QS-B-10","unit":"EA","priority":"C","qty":21},{"id":"SPMELECTXXXX000054","desc":"Overload 23 : 32A","unit":"EA","priority":"C","qty":0},{"id":"SPMELECTXXXX000066","desc":"Push Pottn Green","unit":"EA","priority":"C","qty":0},{"id":"SPMELECTXXXX000108","desc":"Inverter 0.75 KW","unit":"EA","priority":"C","qty":0},{"id":"SPMELECTXXXX000116","desc":"Circuit Breaker 10 Amp 1 P","unit":"EA","priority":"C","qty":0},{"id":"SPMELECTXXXX000170","desc":"Power Supply Vin=220VAC,Vout=24VDC, 5A","unit":"EA","priority":"C","qty":0}];
+
+/* ============================================================
+   ICONS — minimal inline SVGs (no icon library dependency)
+   ============================================================ */
+function icon(name, color) {
+  const c = color || 'currentColor';
+  const icons = {
+    gauge: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 12l4-4"/><path d="M12 2v2"/></svg>`,
+    alert: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+    bar: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>`,
+    clipboard: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>`,
+    search: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7A8B8C" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
+    plus: `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#1C2321" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+    x: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F5F1E8" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+    xDark: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1C2321" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+    package: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M3 7l9 5 9-5"/><path d="M12 22V12"/></svg>`,
+    upload: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`,
+    uploadBig: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`,
+    download: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
+    undo: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7.7L3 7"/></svg>`,
+    check: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,
+    checkBig: `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,
+    trendDown: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>`,
+    circle: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>`,
+    fileSheet: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,
+  };
+  return icons[name] || '';
+}
+
+/* ============================================================
+   PRIORITY / STATUS METADATA
+   ============================================================ */
+const PRIORITY_META = {
+  A: { label: 'Critical', color: '#E8542E' },
+  B: { label: 'Moderate', color: '#D9A63C' },
+  C: { label: 'Low', color: '#7A8B8C' },
+};
+
+const STATUS_META = {
+  reorder: { label: 'Reorder', color: '#E8542E', bg: 'rgba(232,84,46,0.14)', icon: 'alert' },
+  low:     { label: 'Low',     color: '#D9A63C', bg: 'rgba(217,166,60,0.14)', icon: 'trendDown' },
+  ok:      { label: 'OK',      color: '#4A7A5C', bg: 'rgba(74,122,92,0.10)',  icon: 'check' },
+  unset:   { label: 'No reorder pt', color: '#7A8B8C', bg: 'rgba(122,139,140,0.10)', icon: 'circle' },
+};
+
+const IMPORT_HEADERS = ['Material', 'Description', 'Unit', 'Priority', 'Qty', 'Min', 'Reorder Point', 'Max'];
+
+/* ============================================================
+   STATE
+   In-memory only — this is a standalone single-file demo with no
+   server or localStorage. State resets on page reload, same as
+   opening a fresh copy of the tool. (Excel import/export and
+   manual add still work normally within a session.)
+   ============================================================ */
+let items = [];
+let logs = [];
+let currentTab = 'dashboard';
+let priorityFilter = 'ALL';
+let statusFilter = 'ALL';
+let searchQuery = '';
+let selectedMaterial = null;
+let newItemPriority = 'B';
+let importPreviewData = null;
+
+/* ============================================================
+   CORE LOGIC (same equations as the source app)
+   ============================================================ */
+function computeStatus(current, reorderPoint) {
+  if (reorderPoint === '' || reorderPoint === null || reorderPoint === undefined || isNaN(reorderPoint)) return 'unset';
+  const rp = Number(reorderPoint);
+  if (current <= rp) return 'reorder';
+  if (current <= rp * 1.3) return 'low';
+  return 'ok';
+}
+
+function getConsumedMap() {
+  const m = {};
+  for (const l of logs) m[l.material] = (m[l.material] || 0) + l.qty;
+  return m;
+}
+
+function getUsageRateMap(consumedMap) {
+  const firstDate = {};
+  for (const l of logs) {
+    if (!firstDate[l.material] || new Date(l.date) < new Date(firstDate[l.material])) {
+      firstDate[l.material] = l.date;
+    }
+  }
+  const rates = {};
+  for (const material in firstDate) {
+    const days = Math.max(1, (Date.now() - new Date(firstDate[material])) / 86400000);
+    rates[material] = (consumedMap[material] || 0) / days;
+  }
+  return rates;
+}
+
+function getRows() {
+  const consumedMap = getConsumedMap();
+  const usageRateMap = getUsageRateMap(consumedMap);
+  return items.map(it => {
+    const consumed = consumedMap[it.id] || 0;
+    const current = it.qty - consumed;
+    const status = computeStatus(current, it.reorderPoint);
+    const max = (it.max === '' || it.max === null || isNaN(Number(it.max))) ? null : Number(it.max);
+    const suggestedOrder = (status === 'reorder' && max !== null) ? Math.max(0, max - current) : null;
+    const usageRate = usageRateMap[it.id] || 0;
+    return Object.assign({}, it, { consumed, current, status, suggestedOrder, usageRate });
+  });
+}
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ============================================================
+   INIT
+   ============================================================ */
+function init() {
+  items = SEED_ITEMS_JSON.map(it => Object.assign({}, it, { min: '', reorderPoint: '', max: '' }));
+  logs = [];
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+
+  buildTabBar();
+  buildSearchIcon();
+  buildFabIcon();
+  buildModalCloseIcons();
+  buildPriorityFilters();
+  buildStatusFilters();
+  buildPriorityToggle();
+  renderAll();
+}
+
+function buildTabBar() {
+  document.getElementById('tab-bar').innerHTML = `
+    <button class="tab-btn active" data-tab="dashboard" onclick="setTab('dashboard')">${icon('gauge')}<span>Dashboard</span></button>
+    <button class="tab-btn" data-tab="reorder" onclick="setTab('reorder')">${icon('alert')}<span id="tab-reorder-label">Reorder (0)</span></button>
+    <button class="tab-btn" data-tab="usage" onclick="setTab('usage')">${icon('bar')}<span>Usage</span></button>
+    <button class="tab-btn" data-tab="log" onclick="setTab('log')">${icon('clipboard')}<span>Log</span></button>
+  `;
+}
+function buildSearchIcon() {
+  document.getElementById('search-wrap').insertAdjacentHTML('afterbegin', icon('search'));
+}
+function buildFabIcon() {
+  document.getElementById('fab-btn').innerHTML = icon('plus');
+  const menu = document.getElementById('fab-menu');
+  menu.children[0].insertAdjacentHTML('afterbegin', icon('clipboard', '#F5F1E8'));
+  menu.children[1].insertAdjacentHTML('afterbegin', icon('package', '#F5F1E8'));
+  menu.children[2].insertAdjacentHTML('afterbegin', icon('upload', '#F5F1E8'));
+}
+function buildModalCloseIcons() {
+  document.getElementById('log-close-btn').innerHTML = icon('x');
+  document.getElementById('add-close-btn').innerHTML = icon('x');
+  document.getElementById('import-close-btn').innerHTML = icon('x');
+}
+
+/* ============================================================
+   TABS
+   ============================================================ */
+function setTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
+  document.getElementById('panel-' + tab).style.display = 'block';
+  renderAll();
+}
+
+/* ============================================================
+   RENDER: header counts
+   ============================================================ */
+function renderCounts(rows) {
+  const c = { reorder: 0, low: 0, ok: 0, unset: 0 };
+  rows.forEach(r => c[r.status]++);
+  document.getElementById('cnt-reorder').textContent = c.reorder;
+  document.getElementById('cnt-low').textContent = c.low;
+  document.getElementById('cnt-ok').textContent = c.ok;
+  const label = document.getElementById('tab-reorder-label');
+  if (label) label.textContent = `Reorder (${c.reorder})`;
+  return c;
+}
+
+/* ============================================================
+   RENDER: filters
+   ============================================================ */
+function buildPriorityFilters() {
+  const wrap = document.getElementById('priority-filters');
+  const opts = [['ALL', 'All classes', '#F5F1E8'], ['A', 'Class A', '#E8542E'], ['B', 'Class B', '#D9A63C'], ['C', 'Class C', '#7A8B8C']];
+  wrap.innerHTML = opts.map(o => {
+    const val = o[0], label = o[1], color = o[2];
+    const active = val === priorityFilter;
+    return `<button class="pill" onclick="setPriorityFilter('${val}')" style="border-color:${active?color:'rgba(245,241,232,0.18)'};color:${active?color:'#B8BCB9'};background:${active?color+'18':'transparent'}">${label}</button>`;
+  }).join('');
+}
+function buildStatusFilters() {
+  const wrap = document.getElementById('status-filters');
+  const opts = [['ALL', 'All statuses', '#F5F1E8'], ['reorder', 'Reorder', '#E8542E'], ['low', 'Low', '#D9A63C'], ['ok', 'OK', '#4A7A5C'], ['unset', 'No min set', '#7A8B8C']];
+  wrap.innerHTML = opts.map(o => {
+    const val = o[0], label = o[1], color = o[2];
+    const active = val === statusFilter;
+    return `<button class="pill" onclick="setStatusFilter('${val}')" style="border-color:${active?color:'rgba(245,241,232,0.18)'};color:${active?color:'#B8BCB9'};background:${active?color+'18':'transparent'}">${label}</button>`;
+  }).join('');
+}
+function setPriorityFilter(v) { priorityFilter = v; buildPriorityFilters(); renderAll(); }
+function setStatusFilter(v) { statusFilter = v; buildStatusFilters(); renderAll(); }
+function onSearch(v) { searchQuery = v; renderAll(); }
+
+/* ============================================================
+   RENDER: Dashboard rows
+   ============================================================ */
+function renderDashboard(rows) {
+  const q = searchQuery.toLowerCase();
+  let filtered = rows
+    .filter(r => priorityFilter === 'ALL' || r.priority === priorityFilter)
+    .filter(r => statusFilter === 'ALL' || r.status === statusFilter)
+    .filter(r => !q.trim() || r.id.toLowerCase().includes(q) || (r.desc || '').toLowerCase().includes(q))
+    .sort((a, b) => {
+      const order = { reorder: 0, low: 1, unset: 2, ok: 3 };
+      if (order[a.status] !== order[b.status]) return order[a.status] - order[b.status];
+      const pOrder = { A: 0, B: 1, C: 2 };
+      return pOrder[a.priority] - pOrder[b.priority];
+    });
+
+  document.getElementById('dash-caption').textContent = `${filtered.length} of ${rows.length} items · tap Min / Max to set thresholds`;
+
+  const container = document.getElementById('dash-rows');
+  if (filtered.length === 0) {
+    container.innerHTML = `<div class="empty-state">No items match this filter.</div>`;
+    return;
+  }
+  container.innerHTML = filtered.map(stockRowHTML).join('');
+}
+
+function stockRowHTML(r) {
+  const meta = STATUS_META[r.status];
+  const pMeta = PRIORITY_META[r.priority];
+  const minDisplay = (r.min === '' || r.min === null) ? '' : r.min;
+  const rpDisplay = (r.reorderPoint === '' || r.reorderPoint === null) ? '' : r.reorderPoint;
+  const maxDisplay = (r.max === '' || r.max === null) ? '' : r.max;
+  return `
+  <div class="row" style="background:${meta.bg}">
+    <div class="row-spine" style="background:${meta.color}"></div>
+    <div class="row-content">
+      <div class="row-top">
+        <span class="row-material">${esc(r.id)}</span>
+        <span class="row-priority-tag" style="color:${pMeta.color};border-color:${pMeta.color}">${r.priority}</span>
+      </div>
+      <div class="row-desc">${esc(r.desc)}</div>
+      <div class="row-bottom">
+        <div class="row-stat">
+          <span class="lbl">CURRENT</span>
+          <span class="val">${r.current} <span class="unit">${esc(r.unit)}</span></span>
+        </div>
+        <div class="row-stat">
+          <span class="lbl">MIN</span>
+          <span class="editable-val" onclick="editField(this,'${esc(r.id)}','min','${minDisplay}')">${minDisplay === '' ? '—' : minDisplay}</span>
+        </div>
+        <div class="row-stat">
+          <span class="lbl">REORDER PT</span>
+          <span class="editable-val" onclick="editField(this,'${esc(r.id)}','reorderPoint','${rpDisplay}')">${rpDisplay === '' ? '—' : rpDisplay}</span>
+        </div>
+        <div class="row-stat">
+          <span class="lbl">MAX</span>
+          <span class="editable-val" onclick="editField(this,'${esc(r.id)}','max','${maxDisplay}')">${maxDisplay === '' ? '—' : maxDisplay}</span>
+        </div>
+        <div class="status-badge" style="color:${meta.color};border-color:${meta.color}">
+          ${icon(meta.icon, meta.color)}
+          <span>${meta.label.toUpperCase()}</span>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function editField(spanEl, id, field, currentVal) {
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.min = '0';
+  input.className = 'mini-input';
+  input.value = currentVal;
+  spanEl.replaceWith(input);
+  input.focus();
+  input.select();
+  function commit() { updateField(id, field, input.value); }
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') commit(); });
+}
+
+function updateField(id, field, value) {
+  items = items.map(it => it.id === id ? Object.assign({}, it, { [field]: value === '' ? '' : Math.max(0, Number(value)) }) : it);
+  renderAll();
+}
+
+/* ============================================================
+   RENDER: Reorder tab
+   ============================================================ */
+let reorderListCache = [];
+
+function renderReorder(rows) {
+  const reorderList = rows.filter(r => r.status === 'reorder')
+    .sort((a, b) => ({ A: 0, B: 1, C: 2 }[a.priority] - ({ A: 0, B: 1, C: 2 }[b.priority])));
+  reorderListCache = reorderList;
+
+  const exportBtn = document.getElementById('export-btn');
+  if (exportBtn.children.length === 0) exportBtn.insertAdjacentHTML('afterbegin', icon('download'));
+  exportBtn.style.display = reorderList.length > 0 ? 'flex' : 'none';
+
+  const container = document.getElementById('reorder-content');
+  if (reorderList.length === 0) {
+    container.innerHTML = `<div class="empty-good">${icon('checkBig', '#4A7A5C')}<div style="margin-top:8px;">Nothing needs reordering right now.</div></div>`;
+    return;
+  }
+  container.innerHTML = `<div class="row-list">` + reorderList.map(r => {
+    const pMeta = PRIORITY_META[r.priority];
+    return `
+    <div class="row" style="background:${STATUS_META.reorder.bg}">
+      <div class="row-spine" style="background:#E8542E"></div>
+      <div class="row-content">
+        <div class="row-top">
+          <span class="row-material">${esc(r.id)}</span>
+          <span class="row-priority-tag" style="color:${pMeta.color};border-color:${pMeta.color}">${r.priority}</span>
+        </div>
+        <div class="row-desc">${esc(r.desc)}</div>
+        <div class="reorder-stats-line">
+          <span>Current <b>${r.current}</b></span>
+          <span>Min <b>${r.min === '' || r.min === null ? '—' : r.min}</b></span>
+          <span>Reorder Pt <b>${r.reorderPoint}</b></span>
+          <span>Max <b>${r.max === '' || r.max === null ? '—' : r.max}</b></span>
+          ${r.suggestedOrder !== null ? `<span class="suggested-order">Order <b>${r.suggestedOrder}</b> ${esc(r.unit)}</span>` : ''}
+        </div>
+      </div>
+    </div>`;
+  }).join('') + `</div>`;
+}
+
+function downloadReorderCSV() {
+  const list = reorderListCache;
+  const header = ['Material', 'Description', 'Priority', 'Unit', 'Current Qty', 'Min', 'Reorder Point', 'Max', 'Suggested Order Qty'];
+  const lines = [header.join(',')];
+  list.forEach(r => {
+    const line = [
+      r.id, `"${(r.desc || '').replace(/"/g, '""')}"`, r.priority, r.unit,
+      r.current, (r.min === '' || r.min === null) ? '' : r.min, r.reorderPoint,
+      (r.max === '' || r.max === null) ? '' : r.max, r.suggestedOrder === null ? '' : r.suggestedOrder,
+    ];
+    lines.push(line.join(','));
+  });
+  downloadTextFile(lines.join('\n'), `reorder-list-${new Date().toISOString().slice(0,10)}.csv`, 'text/csv;charset=utf-8;');
+}
+
+/* ============================================================
+   RENDER: Usage tab
+   ============================================================ */
+function renderUsage(rows) {
+  const topUsage = rows.filter(r => r.usageRate > 0).sort((a, b) => b.usageRate - a.usageRate).slice(0, 12);
+  const container = document.getElementById('usage-content');
+  if (topUsage.length === 0) {
+    container.innerHTML = `<div class="empty-state">No consumption logged yet — usage trends will appear here once you start logging withdrawals.</div>`;
+    return;
+  }
+  const maxRate = topUsage[0].usageRate || 1;
+  container.innerHTML = `<div class="row-list" style="margin-top:12px;">` + topUsage.map(r => {
+    const pct = Math.max(6, Math.round((r.usageRate / maxRate) * 100));
+    const pMeta = PRIORITY_META[r.priority];
+    return `
+    <div class="usage-row">
+      <div class="usage-top">
+        <span class="row-material">${esc(r.id)}</span>
+        <span class="usage-rate">${r.usageRate.toFixed(2)} / day</span>
+      </div>
+      <div class="row-desc">${esc(r.desc)}</div>
+      <div class="usage-bar-track"><div class="usage-bar-fill" style="width:${pct}%;background:${pMeta.color}"></div></div>
+    </div>`;
+  }).join('') + `</div>`;
+}
+
+/* ============================================================
+   RENDER: Log tab
+   ============================================================ */
+function renderLog() {
+  document.getElementById('log-caption').textContent = `${logs.length} consumption entries recorded`;
+  const undoBtn = document.getElementById('undo-btn');
+  if (undoBtn.children.length === 0) undoBtn.insertAdjacentHTML('afterbegin', icon('undo', '#D9A63C'));
+  undoBtn.style.display = logs.length > 0 ? 'flex' : 'none';
+
+  const container = document.getElementById('log-content');
+  if (logs.length === 0) {
+    container.innerHTML = `<div class="empty-state">No consumption logged yet. Tap the + button to record one.</div>`;
+    return;
+  }
+  container.innerHTML = logs.map((l, i) => `
+    <div class="log-entry ${i===0?'latest':''}">
+      <div class="log-spine" style="background:${i===0?'#D9A63C':'#7A8B8C'}"></div>
+      <div class="log-main">
+        <div class="log-top">
+          <span class="log-material">${esc(l.material)}</span>
+          <span class="log-qty">−${l.qty}</span>
+        </div>
+        <div class="log-desc">${esc(l.desc)}</div>
+        <div class="log-meta">${new Date(l.date).toLocaleString()} · ${esc(l.by)}${l.reason ? ' · ' + esc(l.reason) : ''}</div>
+      </div>
+    </div>`).join('');
+}
+
+function undoLastLog() {
+  if (logs.length === 0) return;
+  const last = logs[0];
+  logs = logs.slice(1);
+  showToast('warn', `Undone: ${last.qty} × ${last.material} removed from the log.`);
+  renderAll();
+}
+
+/* ============================================================
+   RENDER ALL
+   ============================================================ */
+function renderAll() {
+  const rows = getRows();
+  renderCounts(rows);
+  if (currentTab === 'dashboard') renderDashboard(rows);
+  if (currentTab === 'reorder') renderReorder(rows);
+  if (currentTab === 'usage') renderUsage(rows);
+  if (currentTab === 'log') renderLog();
+}
+
+/* ============================================================
+   FAB MENU
+   ============================================================ */
+function toggleMenu() {
+  const menu = document.getElementById('fab-menu');
+  const btn = document.getElementById('fab-btn');
+  const isOpen = menu.style.display === 'flex';
+  menu.style.display = isOpen ? 'none' : 'flex';
+  btn.innerHTML = isOpen ? icon('plus') : icon('xDark');
+}
+function closeMenu() {
+  document.getElementById('fab-menu').style.display = 'none';
+  document.getElementById('fab-btn').innerHTML = icon('plus');
+}
+
+/* ============================================================
+   MODALS
+   ============================================================ */
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+  if (id === 'log-modal') {
+    selectedMaterial = null;
+    document.getElementById('log-material-input').value = '';
+    document.getElementById('log-qty-input').value = '';
+    document.getElementById('log-by-input').value = '';
+    document.getElementById('log-reason-input').value = '';
+    document.getElementById('log-form-error').textContent = '';
+    renderMaterialSuggestions('');
+  }
+  if (id === 'add-modal') {
+    document.getElementById('new-id-input').value = '';
+    document.getElementById('new-desc-input').value = '';
+    document.getElementById('new-unit-input').value = 'EA';
+    document.getElementById('new-qty-input').value = '';
+    document.getElementById('new-min-input').value = '';
+    document.getElementById('new-reorderpoint-input').value = '';
+    document.getElementById('new-max-input').value = '';
+    document.getElementById('add-form-error').textContent = '';
+    newItemPriority = 'B';
+    buildPriorityToggle();
+  }
+  if (id === 'import-modal') {
+    renderImportInitial();
+  }
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+/* ---- Log consumption modal ---- */
+function onMaterialQuery(q) {
+  selectedMaterial = null;
+  renderMaterialSuggestions(q);
+}
+function renderMaterialSuggestions(q) {
+  const query = (q || '').toLowerCase().trim();
+  let list = items;
+  if (query) list = items.filter(it => it.id.toLowerCase().includes(query) || (it.desc || '').toLowerCase().includes(query));
+  list = list.slice(0, 8);
+  const wrap = document.getElementById('log-suggest-list');
+  if (selectedMaterial) { wrap.innerHTML = ''; return; }
+  wrap.innerHTML = list.map(it => {
+    const pMeta = PRIORITY_META[it.priority];
+    return `<div class="suggest-item" onclick="selectMaterial('${esc(it.id)}')">
+      <span class="suggest-dot" style="background:${pMeta.color}"></span>
+      <div><div class="suggest-id">${esc(it.id)}</div><div class="suggest-desc">${esc(it.desc)}</div></div>
+    </div>`;
+  }).join('');
+}
+function selectMaterial(id) {
+  selectedMaterial = id;
+  document.getElementById('log-material-input').value = id;
+  document.getElementById('log-suggest-list').innerHTML = '';
+}
+function submitLog() {
+  const qty = Number(document.getElementById('log-qty-input').value);
+  const by = document.getElementById('log-by-input').value.trim();
+  const reason = document.getElementById('log-reason-input').value.trim();
+  const errEl = document.getElementById('log-form-error');
+
+  if (!selectedMaterial || !qty || qty <= 0) {
+    errEl.textContent = 'Pick a material and enter a quantity greater than 0.';
+    return;
+  }
+  errEl.textContent = '';
+  const item = items.find(it => it.id === selectedMaterial);
+  const entry = {
+    id: `log-${Date.now()}`,
+    date: new Date().toISOString(),
+    material: selectedMaterial,
+    desc: item ? item.desc : '',
+    qty: qty,
+    by: by || 'Unrecorded',
+    reason: reason,
+  };
+  logs = [entry].concat(logs);
+
+  const consumedMap = getConsumedMap();
+  const newCurrent = item.qty - consumedMap[selectedMaterial];
+  const status = computeStatus(newCurrent, item.reorderPoint);
+  showToast(
+    status === 'reorder' ? 'alert' : status === 'low' ? 'warn' : 'success',
+    `${selectedMaterial} logged. Current stock now ${newCurrent} ${item.unit}.${status === 'reorder' ? ' REORDER NOW.' : status === 'low' ? ' Running low.' : ''}`
+  );
+  closeModal('log-modal');
+  renderAll();
+}
+
+/* ---- Add material modal ---- */
+function buildPriorityToggle() {
+  const wrap = document.getElementById('new-priority-toggle');
+  wrap.innerHTML = ['A', 'B', 'C'].map(p => {
+    const pMeta = PRIORITY_META[p];
+    const active = newItemPriority === p;
+    return `<button type="button" onclick="setNewPriority('${p}')" style="background:${active?pMeta.color:'transparent'};color:${active?'#1C2321':pMeta.color};border-color:${pMeta.color}">${p}</button>`;
+  }).join('');
+}
+function setNewPriority(p) { newItemPriority = p; buildPriorityToggle(); }
+
+function submitAddItem() {
+  const id = document.getElementById('new-id-input').value.trim();
+  const desc = document.getElementById('new-desc-input').value.trim();
+  const unit = document.getElementById('new-unit-input').value.trim() || 'EA';
+  const qty = document.getElementById('new-qty-input').value;
+  const min = document.getElementById('new-min-input').value;
+  const reorderPoint = document.getElementById('new-reorderpoint-input').value;
+  const max = document.getElementById('new-max-input').value;
+  const errEl = document.getElementById('add-form-error');
+
+  if (!id) { errEl.textContent = 'Material code is required.'; return; }
+  if (items.some(it => it.id === id)) { errEl.textContent = 'That material code already exists.'; return; }
+  errEl.textContent = '';
+
+  const item = {
+    id: id, desc: desc || '(no description)', unit: unit,
+    priority: newItemPriority,
+    qty: qty === '' ? 0 : Math.max(0, Number(qty)),
+    min: min === '' ? '' : Math.max(0, Number(min)),
+    reorderPoint: reorderPoint === '' ? '' : Math.max(0, Number(reorderPoint)),
+    max: max === '' ? '' : Math.max(0, Number(max)),
+  };
+  items = [item].concat(items);
+  showToast('success', `${id} added to the master list.`);
+  closeModal('add-modal');
+  renderAll();
+}
+
+/* ---- Import modal ---- */
+function renderImportInitial() {
+  importPreviewData = null;
+  const wrap = document.getElementById('import-form-content');
+  wrap.innerHTML = `
+    <div class="import-hint">Expected columns: <b>${IMPORT_HEADERS.join(', ')}</b>. Matching is case-insensitive. Existing codes get updated; new codes get added.</div>
+    <button class="template-btn" onclick="downloadTemplateCSV()">${icon('fileSheet', '#D9A63C')} Download template</button>
+    <label class="upload-zone">
+      ${icon('uploadBig', '#7A8B8C')}
+      <span>Tap to choose a .xlsx or .csv file</span>
+      <input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFileSelect(event)">
+    </label>
+    <div class="form-error" id="import-error"></div>
+  `;
+}
+
+function downloadTemplateCSV() {
+  const header = IMPORT_HEADERS.join(',');
+  const example = 'SPM-000000999,"Example Contactor 3-Phase",EA,A,5,2,4,10';
+  downloadTextFile(header + '\n' + example, 'spare-parts-import-template.csv', 'text/csv;charset=utf-8;');
+}
+
+function handleFileSelect(evt) {
+  const file = evt.target.files && evt.target.files[0];
+  if (!file) return;
+  const errEl = document.getElementById('import-error');
+  errEl.textContent = '';
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rowsRaw = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      if (rowsRaw.length === 0) { errEl.textContent = 'The file has no rows.'; return; }
+
+      const norm = s => String(s).trim().toLowerCase();
+      const keys = Object.keys(rowsRaw[0]);
+      const findKey = (target) => keys.find(k => norm(k) === norm(target)) || keys.find(k => norm(k).includes(norm(target)));
+
+      const map = {
+        Material: findKey('Material'), Description: findKey('Description'), Unit: findKey('Unit'),
+        Priority: findKey('Priority'), Qty: findKey('Qty') || findKey('Quantity'),
+        Min: findKey('Min'), ReorderPoint: findKey('Reorder Point') || findKey('ReorderPoint') || findKey('Reorder'),
+        Max: findKey('Max'),
+      };
+      if (!map.Material) {
+        errEl.textContent = 'Could not find a "Material" column in the file. Expected columns: ' + IMPORT_HEADERS.join(', ');
+        return;
+      }
+      const parsed = rowsRaw.map(r => ({
+        id: String(r[map.Material] == null ? '' : r[map.Material]).trim(),
+        desc: String(r[map.Description] == null ? '' : r[map.Description]).trim(),
+        unit: String(r[map.Unit] == null ? 'EA' : r[map.Unit]).trim() || 'EA',
+        priority: ['A','B','C'].includes(String(r[map.Priority] == null ? '' : r[map.Priority]).trim().toUpperCase()) ? String(r[map.Priority]).trim().toUpperCase() : 'C',
+        qty: Number(r[map.Qty]) || 0,
+        min: (r[map.Min] === '' || r[map.Min] === undefined) ? '' : Number(r[map.Min]),
+        reorderPoint: (r[map.ReorderPoint] === '' || r[map.ReorderPoint] === undefined) ? '' : Number(r[map.ReorderPoint]),
+        max: (r[map.Max] === '' || r[map.Max] === undefined) ? '' : Number(r[map.Max]),
+      })).filter(r => r.id);
+
+      if (parsed.length === 0) { errEl.textContent = 'No valid rows found (missing Material codes).'; return; }
+      importPreviewData = parsed;
+      renderImportPreview();
+    } catch (err) {
+      console.error(err);
+      errEl.textContent = 'Could not read this file. Make sure it is a valid .xlsx or .csv file.';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function renderImportPreview() {
+  const wrap = document.getElementById('import-form-content');
+  const preview = importPreviewData.slice(0, 6);
+  wrap.innerHTML = `
+    <div class="import-hint">${importPreviewData.length} rows ready. Review a few, then confirm.</div>
+    <div class="suggest-list">
+      ${preview.map(r => {
+        const pMeta = PRIORITY_META[r.priority] || { color: '#7A8B8C' };
+        return `<div class="suggest-item">
+          <span class="suggest-dot" style="background:${pMeta.color}"></span>
+          <div><div class="suggest-id">${esc(r.id)} · qty ${r.qty} · min ${r.min===''?'—':r.min} · reorder ${r.reorderPoint===''?'—':r.reorderPoint} · max ${r.max===''?'—':r.max}</div>
+          <div class="suggest-desc">${esc(r.desc)}</div></div>
+        </div>`;
+      }).join('')}
+      ${importPreviewData.length > 6 ? `<div style="padding:10px;font-size:12px;color:#7A8B8C;">+ ${importPreviewData.length - 6} more…</div>` : ''}
+    </div>
+    <div class="form-row">
+      <button class="btn-back" onclick="renderImportInitial()">Back</button>
+      <button class="btn-submit" onclick="confirmImport()">Confirm import</button>
+    </div>
+  `;
+}
+
+function confirmImport() {
+  if (!importPreviewData) return;
+  const existingIds = new Set(items.map(it => it.id));
+  let added = 0, updated = 0;
+  let next = items.slice();
+  for (const row of importPreviewData) {
+    if (existingIds.has(row.id)) {
+      next = next.map(it => it.id === row.id ? Object.assign({}, it, row) : it);
+      updated++;
+    } else {
+      next = [row].concat(next);
+      added++;
+    }
+  }
+  items = next;
+  showToast('success', `Import complete: ${added} added, ${updated} updated.`);
+  closeModal('import-modal');
+  renderAll();
+}
+
+/* ============================================================
+   UTIL: file download, toast
+   ============================================================ */
+function downloadTextFile(text, filename, mime) {
+  const blob = new Blob([text], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+let toastTimer = null;
+function showToast(type, msg) {
+  const el = document.getElementById('toast');
+  const colorMap = { alert: '#E8542E', warn: '#D9A63C', error: '#E8542E', success: '#4A7A5C' };
+  el.style.borderColor = colorMap[type] || '#4A7A5C';
+  el.textContent = msg;
+  el.style.display = 'block';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.style.display = 'none'; }, 3500);
+}
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+window.addEventListener('DOMContentLoaded', init);
+
+</script>
+</body>
+</html>
